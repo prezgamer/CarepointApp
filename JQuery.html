@@ -67,21 +67,19 @@
 </div>
 <table>
     <thead>
-        <tr><th>ID</th><th>Name</th><th>Gender</th><th>NRIC</th><th>Phone</th>
+        <tr><th>ID</th><th>Name</th><th>Gender</th><th>NRIC</th><th>PhoneNumber</th>
             <th>Status</th><th>Doctor</th><th>Book in</th><th>Book out</th><th>Actions</th></tr>
     </thead>
     <tbody id="patBody"></tbody>
 </table>
 
 <script>
-    // >>> Change this to the address "dotnet run" prints (check the port!)
     const API = "http://localhost:5041";
 
     // In-memory copies of what the API returned, so Edit can fill the form without another request
     var specialities = [], statuses = [], doctors = [], patients = [];
 
     // ---------- helpers ----------
-
     function showMsg(text, isError) {
         $("#msg").text(text).css("color", isError ? "crimson" : "green");
     }
@@ -142,7 +140,6 @@
     function fmt(d) { return d ? d.replace("T", " ").substring(0, 16) : "-"; }
 
     // ---------- load + render ----------
-
     function loadAll() {
         return $.when(
             $.getJSON(API + "/doctorspeciality"),
@@ -177,7 +174,6 @@
     }
 
     // ================= SPECIALITIES =================
-
     function resetSp() { $("#spId").val(""); $("#spType").val(""); $("#spSave").text("Add"); $("#spCancel").hide(); }
 
     $("#spSave").click(function () {
@@ -207,7 +203,6 @@
     });
 
     // ================= DOCTORS =================
-
     function resetDoc() {
         $("#docId").val(""); $("#docName").val(""); $("#docPhone").val(""); $("#docSpec").val("");
         $("#docSave").text("Add"); $("#docCancel").hide();
@@ -245,7 +240,6 @@
     });
 
     // ================= PATIENTS =================
-
     function resetPat() {
         $("#patId").val(""); $("#patName").val(""); $("#patGender").val(""); $("#patNric").val("");
         $("#patPhone").val(""); $("#patStatus").val(""); $("#patDoctor").val("");
