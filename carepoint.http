@@ -1,0 +1,62 @@
+GET http://localhost:5041/patients
+
+###
+POST http://localhost:5041/patients
+Content-Type: application/json
+
+{
+    "patientName": "Tan Wei Ming",
+    "patientGender": "Male",
+    "patientNRIC": "S1234567D",
+    "patientPhoneNumber": "91234567",
+    "clinicalStatusId": 1,
+    "doctorId": 1
+}
+
+###
+POST http://localhost:5041/doctorspeciality
+Content-Type: application/json
+
+{ "doctorSpecialityType": "Paediatrics" }
+
+
+###
+GET  http://localhost:5041/doctorspeciality
+Content-Type: application/json
+
+###
+DELETE  http://localhost:5041/doctorspeciality/1
+Content-Type: application/json
+
+@baseUrl = http://localhost:5041
+
+### create a clinical status
+POST {{baseUrl}}/clinicalStatuses
+Content-Type: application/json
+
+{
+    "clinicalStatusName": "Arrived"
+}
+
+### create the others
+POST {{baseUrl}}/clinicalStatuses
+Content-Type: application/json
+
+{
+    "clinicalStatusName": "Late"
+}
+
+###
+POST {{baseUrl}}/clinicalStatuses
+Content-Type: application/json
+
+{
+    "clinicalStatusName": "Missed"
+}
+
+###
+DELETE  {{baseUrl}}/clinicalstatuses/3
+Content-Type: application/json
+
+### list them and note the ids
+GET http://localhost:5041/clinicalStatuses

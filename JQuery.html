@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CarePoint CRUD (jQuery)</title>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    h2 { margin-top: 30px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+    th, td { border: 1px solid #ccc; padding: 4px 8px; font-size: 13px; text-align: left; }
+    th { background: #f0f0f0; }
+    .row { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+    input, select { padding: 4px; }
+    #msg { position: sticky; top: 0; background: #fff; padding: 6px 0; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<h1>CarePoint</h1>
+<div id="msg">Loading...</div>
+
+<!-- ================= DOCTOR SPECIALITIES ================= -->
+<h2>Doctor specialities</h2>
+<div class="row">
+    <input type="hidden" id="spId">  <!-- empty = adding, has a value = editing that id -->
+    <input type="text" id="spType" placeholder="Speciality (e.g. Cardiology)">
+    <button id="spSave">Add</button>
+    <button id="spCancel" style="display:none">Cancel</button>
+</div>
+<table>
+    <thead><tr><th>ID</th><th>Speciality</th><th>Actions</th></tr></thead>
+    <tbody id="spBody"></tbody>
+</table>
+
+<!-- ================= DOCTORS ================= -->
+<h2>Doctors</h2>
+<div class="row">
+    <input type="hidden" id="docId">
+    <input type="text" id="docName" placeholder="Doctor name">
+    <input type="text" id="docPhone" placeholder="Phone (8 digits)">
+    <select id="docSpec"></select>
+    <button id="docSave">Add</button>
+    <button id="docCancel" style="display:none">Cancel</button>
+</div>
+<table>
+    <thead><tr><th>ID</th><th>Name</th><th>Phone</th><th>Speciality</th><th>Actions</th></tr></thead>
+    <tbody id="docBody"></tbody>
+</table>
+
+<!-- ================= PATIENTS ================= -->
+<h2>Patients</h2>
+<div class="row">
+    <input type="hidden" id="patId">
+    <input type="text" id="patName" placeholder="Patient name">
+    <select id="patGender">
+        <option value="">Gender...</option>
+        <option>Male</option>
+        <option>Female</option>
+    </select>
+    <input type="text" id="patNric" placeholder="NRIC (e.g. S1234567D)">
+    <input type="text" id="patPhone" placeholder="Phone (8 digits)">
+    <select id="patStatus"></select>
+    <select id="patDoctor"></select>
+    <button id="patSave">Add</button>
+    <button id="patCancel" style="display:none">Cancel</button>
+</div>
+<table>
+    <thead>
+        <tr><th>ID</th><th>Name</th><th>Gender</th><th>NRIC</th><th>Phone</th>
+            <th>Status</th><th>Doctor</th><th>Book in</th><th>Book out</th><th>Actions</th></tr>
+    </thead>
+    <tbody id="patBody"></tbody>
+</table>
+
+<script>
+    // >>> Change this to the address "dotnet run" prints (check the port!)
+    const API = "http://localhost:5041";
+
+    // In-memory copies of what the API returned, so Edit can fill the form without another request
+    var specialities = [], statuses = [], doctors = [], patients = [];
+
+    // ---------- helpers ----------
+
+    function showMsg(text, isError) {
+        $("#msg").text(text).css("color", isError ? "crimson" : "green");
+    }
+
+    // Turns whatever the API sent back (plain text, validation errors, nothing) into a readable message
+    function errText(xhr) {
+        if (xhr.status === 0) return "Cannot reach the API. Is it running, and is API set to the right port?";
+        var t = xhr.responseText || ("HTTP " + xhr.status);
+        try {
+            var j = JSON.parse(t);
+            if (typeof j === "string") return j;                              // Results.BadRequest("text")
+            if (j.errors) return Object.values(j.errors).flat().join(" ");    // built-in validation errors
+            if (j.title) return j.title;
+        } catch (e) { }
+        return t;
+    }
+
+    // One function for every POST / PUT / DELETE. On success it reloads all the tables.
+    function send(method, url, payload, okMsg) {
+        return $.ajax({
+            url: API + url,
+            method: method,
+            contentType: "application/json",
+            data: payload ? JSON.stringify(payload) : null
+        }).done(function () {
+            showMsg(okMsg, false);
+            loadAll();
+        }).fail(function (xhr) {
+            showMsg(errText(xhr), true);
+        });
+    }
+
+    // Fills a <select>. The first option is a placeholder with an empty value.
+    function fillSelect(sel, items, valueKey, textKey, placeholder) {
+        var $s = $(sel).empty().append($("<option>").val("").text(placeholder));
+        items.forEach(function (i) {
+            $s.append($("<option>").val(i[valueKey]).text(i[textKey]));
+        });
+    }
+
+    // Fills a table body. Cells are set with .text(), so a name like "<b>x</b>" shows as text, not HTML.
+    function fillTable(tbody, rows, idKey, columns) {
+        var $tb = $(tbody).empty();
+        if (!rows.length) {
+            $tb.append($("<tr>").append($("<td>").attr("colspan", columns.length + 1).text("No rows.")));
+            return;
+        }
+        rows.forEach(function (r) {
+            var $tr = $("<tr>").attr("data-id", r[idKey]);
+            columns.forEach(function (c) { $tr.append($("<td>").text(c(r))); });
+            $tr.append($("<td>").append(
+                $("<button>").addClass("editBtn").text("Edit"), " ",
+                $("<button>").addClass("delBtn").text("Delete")));
+            $tb.append($tr);
+        });
+    }
+
+    function fmt(d) { return d ? d.replace("T", " ").substring(0, 16) : "-"; }
+
+    // ---------- load + render ----------
+
+    function loadAll() {
+        return $.when(
+            $.getJSON(API + "/doctorspeciality"),
+            $.getJSON(API + "/clinicalStatuses"),
+            $.getJSON(API + "/doctors"),
+            $.getJSON(API + "/patients")
+        ).done(function (sp, st, dr, pa) {
+            specialities = sp[0]; statuses = st[0]; doctors = dr[0]; patients = pa[0];
+            renderAll();
+        }).fail(function (xhr) {
+            showMsg(errText(xhr), true);
+        });
+    }
+
+    function renderAll() {
+        fillTable("#spBody", specialities, "doctorSpecialityId", [
+            s => s.doctorSpecialityId, s => s.doctorSpecialityType
+        ]);
+        fillTable("#docBody", doctors, "id", [
+            d => d.id, d => d.name, d => d.phoneNumber, d => d.speciality ? d.speciality.doctorSpecialityType : ""
+        ]);
+        fillTable("#patBody", patients, "id", [
+            p => p.id, p => p.name, p => p.gender, p => p.nric, p => p.phoneNumber,
+            p => p.clinicalStatus ? p.clinicalStatus.clinicalStatusName : "",
+            p => p.assignedDoctor ? p.assignedDoctor.name : "",
+            p => fmt(p.bookInDate), p => fmt(p.bookOutDate)
+        ]);
+
+        fillSelect("#docSpec", specialities, "doctorSpecialityId", "doctorSpecialityType", "Speciality...");
+        fillSelect("#patStatus", statuses, "clinicalStatusId", "clinicalStatusName", "Status...");
+        fillSelect("#patDoctor", doctors, "id", "name", "Doctor...");
+    }
+
+    // ================= SPECIALITIES =================
+
+    function resetSp() { $("#spId").val(""); $("#spType").val(""); $("#spSave").text("Add"); $("#spCancel").hide(); }
+
+    $("#spSave").click(function () {
+        var type = $("#spType").val().trim();
+        if (!type) { showMsg("Speciality is required.", true); return; }
+
+        var payload = { doctorSpecialityType: type };
+        var id = $("#spId").val();
+        var call = id ? send("PUT", "/doctorspeciality/" + id, payload, "Speciality updated.")
+                      : send("POST", "/doctorspeciality", payload, "Speciality added.");
+        call.done(resetSp);
+    });
+    $("#spCancel").click(resetSp);
+
+    // .on("click", ".editBtn", ...) on the <tbody> (event delegation) because the rows are created by code
+    $("#spBody").on("click", ".editBtn", function () {
+        var id = $(this).closest("tr").data("id");
+        var s = specialities.find(x => x.doctorSpecialityId === id);
+        $("#spId").val(s.doctorSpecialityId);
+        $("#spType").val(s.doctorSpecialityType);
+        $("#spSave").text("Update");
+        $("#spCancel").show();
+    });
+    $("#spBody").on("click", ".delBtn", function () {
+        var id = $(this).closest("tr").data("id");
+        if (confirm("Delete speciality " + id + "?")) send("DELETE", "/doctorSpecialities/" + id, null, "Speciality deleted.");
+    });
+
+    // ================= DOCTORS =================
+
+    function resetDoc() {
+        $("#docId").val(""); $("#docName").val(""); $("#docPhone").val(""); $("#docSpec").val("");
+        $("#docSave").text("Add"); $("#docCancel").hide();
+    }
+
+    $("#docSave").click(function () {
+        var name = $("#docName").val().trim();
+        var phone = $("#docPhone").val().trim();
+        var specId = parseInt($("#docSpec").val());
+
+        if (!name || !phone || !specId) { showMsg("Name, phone and speciality are required.", true); return; }
+        if (!/^\d{8}$/.test(phone)) { showMsg("Phone number must be exactly 8 digits.", true); return; }
+
+        var payload = { doctorName: name, doctorPhoneNumber: phone, doctorSpecialityId: specId };
+        var id = $("#docId").val();
+        var call = id ? send("PUT", "/doctors/" + id, payload, "Doctor updated.")
+                      : send("POST", "/doctors", payload, "Doctor added.");
+        call.done(resetDoc);
+    });
+    $("#docCancel").click(resetDoc);
+
+    $("#docBody").on("click", ".editBtn", function () {
+        var id = $(this).closest("tr").data("id");
+        var d = doctors.find(x => x.id === id);
+        $("#docId").val(d.id);
+        $("#docName").val(d.name);
+        $("#docPhone").val(d.phoneNumber);
+        $("#docSpec").val(d.doctorSpecialityId);
+        $("#docSave").text("Update");
+        $("#docCancel").show();
+    });
+    $("#docBody").on("click", ".delBtn", function () {
+        var id = $(this).closest("tr").data("id");
+        if (confirm("Delete doctor " + id + "?")) send("DELETE", "/doctors/" + id, null, "Doctor deleted.");
+    });
+
+    // ================= PATIENTS =================
+
+    function resetPat() {
+        $("#patId").val(""); $("#patName").val(""); $("#patGender").val(""); $("#patNric").val("");
+        $("#patPhone").val(""); $("#patStatus").val(""); $("#patDoctor").val("");
+        $("#patSave").text("Add"); $("#patCancel").hide();
+    }
+
+    $("#patSave").click(function () {
+        var name = $("#patName").val().trim();
+        var gender = $("#patGender").val();
+        var nric = $("#patNric").val().trim();
+        var phone = $("#patPhone").val().trim();
+        var statusId = parseInt($("#patStatus").val());
+        var doctorId = parseInt($("#patDoctor").val());
+
+        if (!name || !gender || !nric || !phone || !statusId || !doctorId) {
+            showMsg("Every patient field is required.", true); return;
+        }
+        if (!/^\d{8}$/.test(phone)) { showMsg("Phone number must be exactly 8 digits.", true); return; }
+
+        var payload = {
+            patientName: name, patientGender: gender, patientNRIC: nric,
+            patientPhoneNumber: phone, clinicalStatusId: statusId, doctorId: doctorId
+        };
+        var id = $("#patId").val();
+        var call = id ? send("PUT", "/patients/" + id, payload, "Patient updated.")
+                      : send("POST", "/patients", payload, "Patient added.");
+        call.done(resetPat);
+    });
+    $("#patCancel").click(resetPat);
+
+    $("#patBody").on("click", ".editBtn", function () {
+        var id = $(this).closest("tr").data("id");
+        var p = patients.find(x => x.id === id);
+        $("#patId").val(p.id);
+        $("#patName").val(p.name);
+        $("#patGender").val(p.gender);
+        $("#patNric").val(p.nric);
+        $("#patPhone").val(p.phoneNumber);
+        $("#patStatus").val(p.clinicalStatusId);
+        $("#patDoctor").val(p.doctorId);
+        $("#patSave").text("Update");
+        $("#patCancel").show();
+    });
+    $("#patBody").on("click", ".delBtn", function () {
+        var id = $(this).closest("tr").data("id");
+        if (confirm("Delete patient " + id + "?")) send("DELETE", "/patients/" + id, null, "Patient deleted.");
+    });
+
+    // ---------- start ----------
+    loadAll().done(function () { showMsg("Loaded.", false); });
+</script>
+
+</body>
+</html>
