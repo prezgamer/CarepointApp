@@ -167,12 +167,12 @@
             s => s.doctorSpecialityId, s => s.doctorSpecialityType
         ]);
         fillTable("#docBody", doctors, "id", [
-            d => d.id, d => d.name, d => d.phoneNumber, d => d.speciality ? d.speciality.doctorSpecialityType : ""
+            d => d.id, d => d.name, d => d.phoneNumber, d => d.speciality ? d.speciality.doctorSpecialityType : "No speciality assigned"
         ]);
         fillTable("#patBody", patients, "id", [
             p => p.id, p => p.name, p => p.gender, p => maskNric(p.nric), p => p.phoneNumber,
-            p => p.clinicalStatus ? p.clinicalStatus.clinicalStatusName : "",
-            p => p.assignedDoctor ? p.assignedDoctor.name : "",
+            p => p.clinicalStatus ? p.clinicalStatus.clinicalStatusName : "No clinical status assigned",
+            p => p.assignedDoctor ? p.assignedDoctor.name : "No doctor assigned",
             p => fmt(p.bookInDate), p => fmt(p.bookOutDate)
         ]);
 
@@ -207,7 +207,8 @@
     });
     $("#spBody").on("click", ".delBtn", function () {
         var id = $(this).closest("tr").data("id");
-        if (confirm("Delete speciality " + id + "?")) send("DELETE", "/doctorSpecialities/" + id, null, "Speciality deleted.");
+        // fixed: was "/doctorSpecialities/" (plural) — now matches the singular route used everywhere else in this file
+        if (confirm("Delete speciality " + id + "?")) send("DELETE", "/doctorspeciality/" + id, null, "Speciality deleted.");
     });
 
     // ================= DOCTORS =================

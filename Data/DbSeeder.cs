@@ -8,64 +8,76 @@ public static class DbSeeder
     public static async Task SeedAsync(CarePointDataContext db)
     {
         // ---------- 1. Clinical statuses ----------
-        if (!await db.clinicalStatuses.AnyAsync())
+        // Seed each name individually if missing, instead of only checking "is the table empty".
+        // This survives a partial delete/cascade without crashing later lookups.
+        string[] statusNames = { "Arrived", "Late", "Missed" };
+        foreach (var name in statusNames)
         {
-            db.clinicalStatuses.AddRange(
-                new ClinicalStatus { clinicalStatusName = "Arrived" },
-                new ClinicalStatus { clinicalStatusName = "Late" },
-                new ClinicalStatus { clinicalStatusName = "Missed" });
-            await db.SaveChangesAsync();
+            if (!await db.clinicalStatuses.AnyAsync(s => s.clinicalStatusName == name))
+                db.clinicalStatuses.Add(new ClinicalStatus { clinicalStatusName = name });
         }
- 
+        await db.SaveChangesAsync();
+
         // ---------- 2. Doctor specialities ----------
-        if (!await db.doctorSpecialities.AnyAsync())
+        string[] specialityNames = { "General Practice", "Cardiology", "Paediatrics", "Orthopaedics", "Dermatology" };
+        foreach (var name in specialityNames)
         {
-            db.doctorSpecialities.AddRange(
-                new DoctorSpeciality { doctorSpecialityType = "General Practice" },
-                new DoctorSpeciality { doctorSpecialityType = "Cardiology" },
-                new DoctorSpeciality { doctorSpecialityType = "Paediatrics" },
-                new DoctorSpeciality { doctorSpecialityType = "Orthopaedics" },
-                new DoctorSpeciality { doctorSpecialityType = "Dermatology" });
-            await db.SaveChangesAsync();
+            if (!await db.doctorSpecialities.AnyAsync(s => s.doctorSpecialityType == name))
+                db.doctorSpecialities.Add(new DoctorSpeciality { doctorSpecialityType = name });
         }
- 
+        await db.SaveChangesAsync();
+
         // ---------- 3. Doctors ----------
-        if (!await db.doctors.AnyAsync())
+        // Re-read ids AFTER the specialities above are guaranteed to exist.
+        var specialityIds = await db.doctorSpecialities
+            .ToDictionaryAsync(s => s.doctorSpecialityType, s => s.doctorSpecialityId);
+
+        var doctorSeed = new (string Name, string Phone, string Speciality)[]
         {
-            // Read the ids back from the database instead of assuming they are 1, 2, 3...
-            var specialityIds = await db.doctorSpecialities
-                .ToDictionaryAsync(s => s.doctorSpecialityType, s => s.doctorSpecialityId);
- 
-            db.doctors.AddRange(
-                new Doctor { name = "Dr. Lim Wei Jie", phoneNumber = "91110001", doctorSpecialityId = specialityIds["General Practice"] },
-                new Doctor { name = "Dr. Priya Nair", phoneNumber = "91110002", doctorSpecialityId = specialityIds["Cardiology"] },
-                new Doctor { name = "Dr. Ahmad Rahman", phoneNumber = "91110003", doctorSpecialityId = specialityIds["Paediatrics"] },
-                new Doctor { name = "Dr. Chua Mei Ling", phoneNumber = "91110004", doctorSpecialityId = specialityIds["Orthopaedics"] },
-                new Doctor { name = "Dr. Koh Jun Wei", phoneNumber = "91110005", doctorSpecialityId = specialityIds["Dermatology"] });
-            await db.SaveChangesAsync();
+            ("Dr. Lim Wei Jie",  "91110001", "General Practice"),
+            ("Dr. Priya Nair",   "91110002", "Cardiology"),
+            ("Dr. Ahmad Rahman", "91110003", "Paediatrics"),
+            ("Dr. Chua Mei Ling","91110004", "Orthopaedics"),
+            ("Dr. Koh Jun Wei",  "91110005", "Dermatology"),
+        };
+
+        foreach (var d in doctorSeed)
+        {
+            if (!await db.doctors.AnyAsync(x => x.name == d.Name))
+            {
+                db.doctors.Add(new Doctor
+                {
+                    name = d.Name,
+                    phoneNumber = d.Phone,
+                    doctorSpecialityId = specialityIds[d.Speciality]
+                });
+            }
         }
- 
+        await db.SaveChangesAsync();
+
         // ---------- 4. Patients (100 fake ones) ----------
+        // Still gated on "table is empty", since 100 randomly generated patients
+        // aren't individually named/checkable the way statuses/specialities/doctors are.
         if (!await db.patients.AnyAsync())
         {
             var statusIds = await db.clinicalStatuses
                 .ToDictionaryAsync(s => s.clinicalStatusName, s => s.clinicalStatusId);
             var doctorIds = await db.doctors.Select(d => d.id).ToListAsync();
- 
+
             string[] lastNames = { "Tan", "Lim", "Lee", "Ng", "Ong", "Wong", "Goh", "Chua", "Koh", "Teo" };
             string[] firstNames = { "Wei Ming", "Hui Min", "Jia Hui", "Xiu Ling", "Kai Xin",
                                     "Mei Ling", "Jun Wei", "Li Ting", "Zi Xuan", "Rui En" };
             const string nricLetters = "ABCDEFGHIZJ";
- 
+
             var rng = new Random(42); // fixed seed = the same 100 patients every time
             var patients = new List<Patient>();
- 
+
             for (int i = 1; i <= 100; i++)
             {
                 // About 70% Arrived, 20% Late, 10% Missed
                 var roll = rng.NextDouble();
                 string status = roll < 0.7 ? "Arrived" : roll < 0.9 ? "Late" : "Missed";
- 
+
                 // Missed patients never came in, so both dates stay null
                 DateTime? bookIn = null;
                 DateTime? bookOut = null;
@@ -75,12 +87,12 @@ public static class DbSeeder
                         .AddDays(-rng.Next(0, 21))
                         .AddHours(8 + rng.Next(0, 9))
                         .AddMinutes(rng.Next(0, 4) * 15);
- 
+
                     // About 15% have checked in but not out yet
                     if (rng.NextDouble() > 0.15)
                         bookOut = bookIn.Value.AddMinutes(rng.Next(15, 61));
                 }
- 
+
                 patients.Add(new Patient
                 {
                     name = $"{lastNames[rng.Next(lastNames.Length)]} {firstNames[rng.Next(firstNames.Length)]}",
@@ -95,7 +107,7 @@ public static class DbSeeder
                     bookOutDate = bookOut
                 });
             }
- 
+
             db.patients.AddRange(patients);
             await db.SaveChangesAsync();
         }

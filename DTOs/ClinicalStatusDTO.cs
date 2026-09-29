@@ -2,5 +2,9 @@ namespace CarePointApp.DTOs;
 
 public record CreateClinicalStatusDto
 (
-    string ClinicalStatusName
+    string ClinicalStatusName // Clinical Status Name
+    );
+
+public record UpdateClinicalStatusDto(
+    string ClinicalStatusName // Clinical Status Name
     );

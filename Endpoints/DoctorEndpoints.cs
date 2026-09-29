@@ -9,9 +9,11 @@ public static class DoctorEndpoints
 {
     public static void MapDoctorEndpoints(this WebApplication app)
     {
+        // Endpoint to get all doctors with their specialities
         app.MapGet("/doctors", async (CarePointDataContext db) => 
             await db.doctors.Include(d => d.speciality).ToListAsync());
 
+        // Endpoint to get a specific doctor by ID with their speciality
         app.MapGet("/doctors/{id:int}", async (int id,CarePointDataContext db) =>
         {
             var doctor = await db.doctors.FirstOrDefaultAsync(p => 
@@ -21,6 +23,7 @@ public static class DoctorEndpoints
             Results.Ok($"Clinical Status is found: {doctor}");
         });
 
+        // Endpoint to create a new doctor
         app.MapPost("/doctors", async (CreateDoctorDto dto, CarePointDataContext db) =>
         {
         
@@ -52,6 +55,7 @@ public static class DoctorEndpoints
             return Results.Created($"/doctors/{doctor.id}", new { doctor.id, doctor.name });
         });
 
+        // Endpoint to update an existing doctor
         app.MapPut("/doctors/{id:int}", async (int id, UpdateDoctorDto dto, CarePointDataContext db) =>
         {
             if (string.IsNullOrWhiteSpace(dto.doctorName) ||
@@ -81,6 +85,7 @@ public static class DoctorEndpoints
             return Results.NoContent();
         });
 
+        // Endpoint to delete a doctor
         app.MapDelete("/doctors/{id:int}", async (int id, CarePointDataContext db) =>
         {
             var doctor = await db.doctors.FindAsync(id);
@@ -90,8 +95,7 @@ public static class DoctorEndpoints
             }
 
             db.doctors.Remove(doctor);
-            await db.SaveChangesAsync();
-
+            await db.SaveChangesAsync();  
             return Results.NoContent();
         });
     }

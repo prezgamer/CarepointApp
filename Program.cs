@@ -17,7 +17,10 @@ builder.Services.AddCors(options =>
     });
 });
 
-var connString = "Server=(localdb)\\MSSQLLocalDB;Database=CarePointApp;Trusted_Connection=True;TrustServerCertificate=True;";
+// var connString = "Server=(localdb)\\MSSQLLocalDB;Database=CarePointApp;Trusted_Connection=True;TrustServerCertificate=True;";
+// builder.Services.AddSqlServer<CarePointDataContext>(connString);
+
+var connString = "Server=.\\SQLEXPRESS;Database=CarePointApp;Trusted_Connection=True;TrustServerCertificate=True;";
 builder.Services.AddSqlServer<CarePointDataContext>(connString);
 
 var app = builder.Build();
@@ -30,8 +33,37 @@ if (app.Environment.IsDevelopment())
     await db.Database.MigrateAsync();   // replaces running "dotnet ef database update" by hand
     await DbSeeder.SeedAsync(db);
 }
+// Development only: Setup a debug endpoint to run arbitrary SQL queries against the database
+if (app.Environment.IsDevelopment())
+{
+    // For Checking the database connection string and other details, for debugging purposes
+    app.MapGet("/debug/query", async (string sql, CarePointDataContext db) =>
+    {
+        var results = new List<Dictionary<string, object?>>();
+        var connection = db.Database.GetDbConnection();
 
-app.MapGet("/", () => "Carepoint App API");
+        if (connection.State != System.Data.ConnectionState.Open)
+            await connection.OpenAsync();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        using var reader = await command.ExecuteReaderAsync();
+
+        while (await reader.ReadAsync())
+        {
+            var row = new Dictionary<string, object?>();
+            for (int i = 0; i < reader.FieldCount; i++)
+                row[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+            results.Add(row);
+        }
+
+        return Results.Ok(results);
+    });
+}
+
+app.UseDefaultFiles(); // Serve index.html as the default file
+app.UseStaticFiles();  // Serve static files from wwwroot folder
+
 app.UseCors("AllowAll"); // Will not be AllowAll during Prod, only selected addresses
 
 app.MapClinicalStatusEndpoints(); // Patient Clinical Statuses Endpoints API

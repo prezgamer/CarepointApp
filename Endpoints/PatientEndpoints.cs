@@ -5,16 +5,33 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CarePointApp.Endpoints;
 
+public class PatientSearchRow
+{
+    public int id { get; set; }
+    public string name { get; set; } = "";
+    public string gender { get; set; } = "";
+    public string nric { get; set; } = "";
+    public string phoneNumber { get; set; } = "";
+    public int clinicalStatusId { get; set; }
+    public string? clinicalStatusName { get; set; }
+    public int? doctorId { get; set; }
+    public string? doctorName { get; set; }
+    public DateTime? bookInDate { get; set; }
+    public DateTime? bookOutDate { get; set; }
+}
+
 public static class PatientEndpoints
 {
     public static void MapPatientEndpoints(this WebApplication app)
     {
+        // Endpoint to get all patients with their clinical status and assigned doctor
         app.MapGet("/patients", async (CarePointDataContext db) => 
             await db.patients.
             Include(p => p.clinicalStatus).
             Include(p => p.assignedDoctor).
             ToListAsync());
 
+        // Endpoint to get a specific patient by ID with their clinical status and assigned doctor
         app.MapGet("/patients/{id:int}", async (int id,CarePointDataContext db) =>
         {
             var patient = await db.patients
@@ -25,6 +42,7 @@ public static class PatientEndpoints
             return patient is null ? Results.NotFound($"No patients found matching of id of {id}.") : Results.Ok($"Patient is found: {patient}");
         });
 
+        // Endpoint to search for patients by name with their clinical status and assigned doctor
         app.MapGet("/patients/search", async (string? name,CarePointDataContext db) => 
         {
             var patient = db.patients
@@ -47,6 +65,22 @@ public static class PatientEndpoints
             return Results.Ok(await patient.ToListAsync());
         });
 
+        // Endpoint to search for patients by name using a stored procedure (usp_SearchPatientsByName) with their clinical status and assigned doctor
+        app.MapGet("/patients/search-proc", async (string? name, CarePointDataContext db) =>
+        {
+            var searchTerm = name ?? "";
+
+            var results = await db.Database
+                .SqlQueryRaw<PatientSearchRow>("EXEC usp_SearchPatientsByName @Name = {0}", searchTerm)
+                .ToListAsync();
+
+            if (results.Count == 0)
+                return Results.NotFound($"No patients found matching '{searchTerm}'.");
+
+            return Results.Ok(results);
+        });
+
+        // Endpoint to create a new patient
         app.MapPost("/patients", async (CreatePatientDto dto, CarePointDataContext db) =>
         {
             var statusExists = await db.clinicalStatuses.AnyAsync(s => s.clinicalStatusId == dto.clinicalStatusId);
@@ -80,6 +114,7 @@ public static class PatientEndpoints
             return Results.Created($"/patients/{patient.id}", patient);
         });
 
+        // Endpoint to update an existing patient
         app.MapPut("/patients/{id:int}", async (int id, UpdatePatientDto dto, CarePointDataContext db) =>
         {
             var patient = await db.patients.FindAsync(id);
@@ -98,6 +133,7 @@ public static class PatientEndpoints
             return Results.NoContent();
         });
 
+        // Endpoint to check in a patient
         app.MapPost("/patients/{id:int}/checkin", async (int id, CheckInDto dto, CarePointDataContext db) =>
         {
             var patient = await db.patients.FindAsync(id);
@@ -113,6 +149,7 @@ public static class PatientEndpoints
             return Results.NoContent();
         });
 
+        // Endpoint to check out a patient
         app.MapPost("/patients/{id:int}/checkout", async (int id, CheckOutDto dto, CarePointDataContext db) =>
         {
             var patient = await db.patients.FindAsync(id);
@@ -133,6 +170,7 @@ public static class PatientEndpoints
             return Results.NoContent();
         });
 
+        // Endpoint to delete a patient
         app.MapDelete("/patients/{id:int}", async (int id, CarePointDataContext db) =>
         {
             var patient = await db.patients.FindAsync(id);

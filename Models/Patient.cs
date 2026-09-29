@@ -16,7 +16,7 @@ public class Patient : Person
     public ClinicalStatus? clinicalStatus {get;set;}
 
     // FK of Doctor
-    public int doctorId { get; set; }      
+    public int? doctorId { get; set; }      
     // sets the doctor of the patient
     public Doctor? assignedDoctor {get;set;}
 }

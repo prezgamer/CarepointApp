@@ -16,8 +16,8 @@ public record CreatePatientDto
     [RegularExpression(@"^\d+$", ErrorMessage = "Phone number must contain only digits.")]
     string patientPhoneNumber,
 
-    int clinicalStatusId,
-    int doctorId
+    int clinicalStatusId, // Patient's Clinical Status ID
+    int doctorId // Patient's Doctor ID
 );
 
 // For Updating Patient DTO
@@ -34,9 +34,9 @@ public record UpdatePatientDto(
     [RegularExpression(@"^\d+$", ErrorMessage = "Phone number must contain only digits.")]
     string patientPhoneNumber,
 
-    int clinicalStatusId,
-    int doctorId
+    int clinicalStatusId, // Patient's Clinical Status ID
+    int doctorId // Patient's Doctor ID
 );
 
-public record CheckInDto(DateTime bookInDate);
-public record CheckOutDto(DateTime bookOutDate);
+public record CheckInDto(DateTime bookInDate); // For Checking In Patient DTO
+public record CheckOutDto(DateTime bookOutDate); // For Checking Out Patient DTO

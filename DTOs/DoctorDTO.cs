@@ -11,7 +11,7 @@ public record CreateDoctorDto
     string doctorPhoneNumber, // Doctor Phone Number is Required
 
     [Required]
-    int? doctorSpecialityId
+    int? doctorSpecialityId // Doctor Speciality ID is Required
 );
 
 public record UpdateDoctorDto
@@ -24,5 +24,5 @@ public record UpdateDoctorDto
     string doctorPhoneNumber, // Doctor Phone Number is Required
 
     [Required]
-    int? doctorSpecialityId
+    int? doctorSpecialityId // Doctor Speciality ID is Required
 );
