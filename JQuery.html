@@ -139,6 +139,14 @@
 
     function fmt(d) { return d ? d.replace("T", " ").substring(0, 16) : "-"; }
 
+    // Masks an NRIC for display only, e.g. "S1234567D" -> "SXXX4567X".
+    // Keeps the leading letter and the last 4 digits, hides the rest and the checksum letter.
+    // The real value still lives in the "patients" array and in the input field when editing.
+    function maskNric(nric) {
+        if (!nric || nric.length < 9) return nric || "";
+        return nric[0] + "XXX" + nric.substring(4, 8) + "X";
+    }
+
     // ---------- load + render ----------
     function loadAll() {
         return $.when(
@@ -162,7 +170,7 @@
             d => d.id, d => d.name, d => d.phoneNumber, d => d.speciality ? d.speciality.doctorSpecialityType : ""
         ]);
         fillTable("#patBody", patients, "id", [
-            p => p.id, p => p.name, p => p.gender, p => p.nric, p => p.phoneNumber,
+            p => p.id, p => p.name, p => p.gender, p => maskNric(p.nric), p => p.phoneNumber,
             p => p.clinicalStatus ? p.clinicalStatus.clinicalStatusName : "",
             p => p.assignedDoctor ? p.assignedDoctor.name : "",
             p => fmt(p.bookInDate), p => fmt(p.bookOutDate)
@@ -276,7 +284,7 @@
         $("#patId").val(p.id);
         $("#patName").val(p.name);
         $("#patGender").val(p.gender);
-        $("#patNric").val(p.nric);
+        $("#patNric").val(p.nric);   // real value, not the masked one, so it can be saved unchanged
         $("#patPhone").val(p.phoneNumber);
         $("#patStatus").val(p.clinicalStatusId);
         $("#patDoctor").val(p.doctorId);

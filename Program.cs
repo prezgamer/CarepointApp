@@ -31,7 +31,7 @@ if (app.Environment.IsDevelopment())
     await DbSeeder.SeedAsync(db);
 }
 
-app.MapGet("/", () => "Hello World!");
+app.MapGet("/", () => "Carepoint App API");
 app.UseCors("AllowAll"); // Will not be AllowAll during Prod, only selected addresses
 
 app.MapClinicalStatusEndpoints(); // Patient Clinical Statuses Endpoints API
