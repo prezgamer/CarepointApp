@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>CarePoint CRUD (jQuery)</title>
+<title>CarePoint CRUD</title>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <style>
     body { font-family: Arial, sans-serif; margin: 20px; }
@@ -65,6 +65,19 @@
     <button id="patSave">Add</button>
     <button id="patCancel" style="display:none">Cancel</button>
 </div>
+<div class="row">
+    <input type="text" id="patSearchBox" placeholder="Search patients by name...">
+    <button id="patSearchBtn">Search</button>
+    <button id="patSearchClear">Show all</button>
+</div>
+<div class="row">
+    <button id="patSortDocAsc">Sort by doctor A-Z</button>
+    <button id="patSortDocDesc">Sort by doctor Z-A</button>
+    <button id="patSortNameAsc">Sort by name A-Z</button>
+    <button id="patSortNameDesc">Sort by name Z-A</button>
+    <button id="patSortBookInAsc">Sort by book-in (earliest)</button>
+    <button id="patSortBookInDesc">Sort by book-in (latest)</button>
+</div>
 <table>
     <thead>
         <tr><th>ID</th><th>Name</th><th>Gender</th><th>NRIC</th><th>PhoneNumber</th>
@@ -74,7 +87,12 @@
 </table>
 
 <script>
-    const API = "http://localhost:5041";
+    // Auto-detects whatever host and port THIS PAGE was loaded through.
+    // Loaded as http://localhost:8080/... -> API becomes http://localhost:8080
+    // Loaded as http://192.168.1.42:9999/... (another device, different IIS port) -> API becomes that, automatically
+    // This only works correctly because the HTML page and the API are served by the SAME site/port.
+    // If they were ever split onto different ports, this line would need to change to a fixed address instead.
+    const API = window.location.origin;
 
     // In-memory copies of what the API returned, so Edit can fill the form without another request
     var specialities = [], statuses = [], doctors = [], patients = [];
@@ -207,7 +225,6 @@
     });
     $("#spBody").on("click", ".delBtn", function () {
         var id = $(this).closest("tr").data("id");
-        // fixed: was "/doctorSpecialities/" (plural) — now matches the singular route used everywhere else in this file
         if (confirm("Delete speciality " + id + "?")) send("DELETE", "/doctorspeciality/" + id, null, "Speciality deleted.");
     });
 
@@ -296,6 +313,102 @@
         var id = $(this).closest("tr").data("id");
         if (confirm("Delete patient " + id + "?")) send("DELETE", "/patients/" + id, null, "Patient deleted.");
     });
+
+    // ================= PATIENT SEARCH =================
+    // Uses GET /patients/search-proc?name=..., which calls the usp_SearchPatientsByName stored procedure.
+    // Reuses the same fillTable columns as the main patients table, so the layout stays identical.
+    function renderPatientRows(rows) {
+        fillTable("#patBody", rows, "id", [
+            p => p.id, p => p.name, p => p.gender, p => maskNric(p.nric), p => p.phoneNumber,
+            p => p.clinicalStatusName || "No clinical status assigned",
+            p => p.doctorName || "No doctor assigned",
+            p => fmt(p.bookInDate), p => fmt(p.bookOutDate)
+        ]);
+    }
+
+    $("#patSearchBtn").click(function () {
+        var name = $("#patSearchBox").val().trim();
+
+        $.ajax({
+            url: API + "/patients/search-proc",
+            method: "GET",
+            data: { name: name }
+        }).done(function (results) {
+            patients = results;             // keep Edit/Delete working on the filtered rows too
+            renderPatientRows(results);
+            showMsg(results.length + " result(s) for \"" + name + "\" (via stored procedure).", false);
+        }).fail(function (xhr) {
+            patients = [];
+            renderPatientRows([]);          // shows "No rows." instead of leaving stale data on screen
+            showMsg(errText(xhr), true);    // e.g. your endpoint's 404 "No patients found matching ..."
+        });
+    });
+
+    // Pressing Enter in the search box triggers the same search as clicking the button
+    $("#patSearchBox").on("keypress", function (e) {
+        if (e.which === 13) $("#patSearchBtn").click();
+    });
+
+    $("#patSearchClear").click(function () {
+        $("#patSearchBox").val("");
+        loadAll();   // back to the full, unfiltered list
+    });
+
+    // ================= PATIENT SORT BY DOCTOR (via usp_GetPatientsSortedByDoctor) =================
+    // Calls GET /patients/sorted-by-doctor?sortOrder=asc|desc — note the parameter name is
+    // "sortOrder", matching the endpoint's own parameter name, not "order".
+    function sortPatientsByDoctor(sortOrder) {
+        $.ajax({
+            url: API + "/patients/sorted-by-doctor",
+            method: "GET",
+            data: { sortOrder: sortOrder }
+        }).done(function (results) {
+            patients = results;   // keep Edit/Delete working on the sorted rows too
+            renderPatientRows(results);
+            showMsg("Patients sorted by doctor " + (sortOrder.toUpperCase() === "DESC" ? "Z-A" : "A-Z") + ".", false);
+        }).fail(function (xhr) {
+            showMsg(errText(xhr), true);   // e.g. a 400 if something other than ASC/DESC ever got sent
+        });
+    }
+
+    $("#patSortDocAsc").click(function () { sortPatientsByDoctor("ASC"); });
+    $("#patSortDocDesc").click(function () { sortPatientsByDoctor("DESC"); });
+
+    // ================= PATIENT SORT BY NAME (via usp_GetPatientsSortedByName) =================
+    function sortPatientsByName(sortOrder) {
+        $.ajax({
+            url: API + "/patients/sorted-by-name",
+            method: "GET",
+            data: { sortOrder: sortOrder }
+        }).done(function (results) {
+            patients = results;
+            renderPatientRows(results);
+            showMsg("Patients sorted by name " + (sortOrder.toUpperCase() === "DESC" ? "Z-A" : "A-Z") + ".", false);
+        }).fail(function (xhr) {
+            showMsg(errText(xhr), true);
+        });
+    }
+
+    $("#patSortNameAsc").click(function () { sortPatientsByName("ASC"); });
+    $("#patSortNameDesc").click(function () { sortPatientsByName("DESC"); });
+
+    // ================= PATIENT SORT BY BOOK-IN DATE (via usp_GetPatientsSortedByBookIn) =================
+    function sortPatientsByBookIn(sortOrder) {
+        $.ajax({
+            url: API + "/patients/sorted-by-bookin",
+            method: "GET",
+            data: { sortOrder: sortOrder }
+        }).done(function (results) {
+            patients = results;
+            renderPatientRows(results);
+            showMsg("Patients sorted by book-in date, " + (sortOrder.toUpperCase() === "DESC" ? "latest first" : "earliest first") + ".", false);
+        }).fail(function (xhr) {
+            showMsg(errText(xhr), true);
+        });
+    }
+
+    $("#patSortBookInAsc").click(function () { sortPatientsByBookIn("ASC"); });
+    $("#patSortBookInDesc").click(function () { sortPatientsByBookIn("DESC"); });
 
     // ---------- start ----------
     loadAll().done(function () { showMsg("Loaded.", false); });

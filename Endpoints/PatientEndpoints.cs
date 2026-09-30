@@ -65,7 +65,8 @@ public static class PatientEndpoints
             return Results.Ok(await patient.ToListAsync());
         });
 
-        // Endpoint to search for patients by name using a stored procedure (usp_SearchPatientsByName) with their clinical status and assigned doctor
+        // Endpoint to search for patients by name using a stored procedure 
+        // (usp_SearchPatientsByName) with their clinical status and assigned doctor
         app.MapGet("/patients/search-proc", async (string? name, CarePointDataContext db) =>
         {
             var searchTerm = name ?? "";
@@ -76,6 +77,53 @@ public static class PatientEndpoints
 
             if (results.Count == 0)
                 return Results.NotFound($"No patients found matching '{searchTerm}'.");
+
+            return Results.Ok(results);
+        });
+
+        // Endpoint to get patients sorted by their doctor using a stored procedure (usp_GetPatientsSortedByDoctor)
+        app.MapGet("/patients/sorted-by-doctor", async (string? sortOrder, CarePointDataContext db) =>
+        {
+            var order = string.IsNullOrWhiteSpace(sortOrder) ? "ASC" : sortOrder.ToUpper();
+
+            if (order != "ASC" && order != "DESC")
+                return Results.BadRequest("Invalid sort order. Use 'ASC' or 'DESC'.");
+
+            var results = await db.Database
+                .SqlQueryRaw<PatientSearchRow>("EXEC usp_GetPatientsSortedByDoctor @SortOrder = {0}", order)
+                .ToListAsync();
+
+            return Results.Ok(results);
+        });
+
+        // Endpoint to get patients to be sorted by their name using a stored procedure 
+        // (usp_GetPatientsSortedByName) with their clinical status and assigned doctor
+        app.MapGet("/patients/sorted-by-name", async (string? sortOrder, CarePointDataContext db) =>
+        {
+            var order = string.IsNullOrWhiteSpace(sortOrder) ? "ASC" : sortOrder.ToUpper();
+
+            if (order != "ASC" && order != "DESC")
+                return Results.BadRequest("Invalid sort order. Use 'ASC' or 'DESC'.");
+
+            var results = await db.Database
+                .SqlQueryRaw<PatientSearchRow>("EXEC usp_GetPatientsSortedByName @SortOrder = {0}", order)
+                .ToListAsync();
+
+            return Results.Ok(results);
+        });
+
+        // Endpoint to get patients sorted by their book-in date using a stored procedure 
+        // (usp_GetPatientsSortedByBookIn) with their clinical status and assigned doctor
+        app.MapGet("/patients/sorted-by-bookin", async (string? sortOrder, CarePointDataContext db) =>
+        {
+            var order = string.IsNullOrWhiteSpace(sortOrder) ? "ASC" : sortOrder.ToUpper();
+
+            if (order != "ASC" && order != "DESC")
+                return Results.BadRequest("Invalid sort order. Use 'ASC' or 'DESC'.");
+
+            var results = await db.Database
+                .SqlQueryRaw<PatientSearchRow>("EXEC usp_GetPatientsSortedByBookIn @SortOrder = {0}", order)
+                .ToListAsync();
 
             return Results.Ok(results);
         });

@@ -1,4 +1,3 @@
-using CarePointApp;
 using CarePointApp.Data;
 using CarePointApp.Endpoints;
 using Microsoft.EntityFrameworkCore;
@@ -7,8 +6,10 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddValidation();
 
+// Add services to the container.
 builder.Services.AddCors(options =>
 {
+    // Allow all origins, headers, and methods for development purposes
     options.AddPolicy("AllowAll", policy =>
     {
         policy.AllowAnyOrigin()
